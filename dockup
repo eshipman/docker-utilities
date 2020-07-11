@@ -1,0 +1,635 @@
+#!/bin/bash
+
+################################################################################
+## Name    : DockUp (Docker Updater)                                          ##
+## Usage   : ./dockup --help for usage info.                                  ##
+## Author  : Evan Shipman                                                     ##
+## Descr.  : This tool is designed to update an existing docker container     ##
+##           given the container's name, the image to pull, and other options.##
+##           It can be used to rebuild a docker container with a different    ##
+##           image (usually an update) and with given arguments, preserving   ##
+##           any volumes mounted on the previous container.                   ##
+##           For example:                                                     ##
+##               ./dockup -c bitwarden -i bitwardenrs/server:aarch64 -p \     ##
+##               -a "-p 80:80" -s bitwarden.service                           ##
+##           The above command will update a bitwarden container with the     ##
+##           latest aarch64 image. It will preserve mounted volumes, and add  ##
+##           -p 80:80 to the container's command line arguments (opening up   ##
+##           the websocket). The -s arguments specify that there is a systemd ##
+##           service called bitwarden.service that will manage the container. ##
+## Changes : v1.0 - Initial creation.                                         ##
+################################################################################
+
+NAME="DockUp - Docker Updater"
+VERSION="v1.0"
+LICENSE="Copyright (C) 2020 Evan Shipman"
+HEADER="$NAME
+Version: $VERSION
+License MIT: $LICENSE"
+
+# The name of the container to operate on
+container=""
+
+# The arguments to run with the updated container
+container_args=""
+
+# The image name to update: e.g alpine:latest or bitwardenrs/server:aarch64
+image=""
+
+# If there is a systemd service for this container and it's service name
+systemd=false
+systemd_name=""
+
+# Whether to preserve volumes connected to the container
+preserve_volumes=false
+
+# Whether to print verbose output
+verbose=false
+
+# Whether to print help and exit
+print_help=false
+
+# Print the usage of this script
+# $0 - $0 of this script, the command executed calling this script
+function print_usage {
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo
+    echo "    [-h | --help]                      Print this output"
+    echo "    [-c | --container] container_name  Update a container with the given name"
+    echo "    [-a | --args] \"container_args\"     Arguments to run with the updated container"
+    echo "    [-i | --image] image_name          Update the container to the given image"
+    echo "    [-s | --systemd] systemd_service   The container is using run via systemd service"
+    echo "    [-p | --preserve-volumes]          Preserve the container's volumes by mounting to a temporary image (busybox)"
+    echo "    [-v | --verbose]                   Print verbose output"
+    echo
+}
+
+# Parse the command line arguments
+ARGS=""
+while (( "$#" )); do
+    case "$1" in
+        -c|--container|--container=*)
+            # Allow for short/long/long= argument
+            # Set the container's name
+            if [[ "$1" == "--container="* ]]; then
+                container="$(echo "$1" | sed -e 's/^--container=//')"
+            elif [[ "$1" == "--container" || "$1" == "-c" ]]; then
+                container="$2"
+            fi
+            shift
+            ;;
+        -a|--args|--args=*)
+            # Allow for short/long/long= argument
+            # Set the updated container's arguments
+            if [[ "$1" == "--args="* ]]; then
+                container_args="$(echo "$1" | sed -e 's/^--args=//')"
+            elif [[ "$1" == "--args" || "$1" == "-a" ]]; then
+                container_args="$2"
+            fi
+            shift
+            ;;
+        -s|--systemd|--systemd=*)
+            # Allow for short/long/long= argument
+            # Set the systemd service name
+            if [[ "$1" == "--systemd="* ]]; then
+                systemd_name="$(echo "$1" | sed -e 's/^--systemd=//')"
+                systemd=true
+            elif [[ "$1" == "--systemd" || "$1" == "-s" ]]; then
+                systemd_name="$2"
+                systemd=true
+            fi
+            shift
+            ;;
+        -i|--image|--image=*)
+            # Allow for short/long/long= argument
+            # Set the image name
+            if [[ "$1" == "--image="* ]]; then
+                image="$(echo "$1" | sed -e 's/^--image=//')"
+            elif [[ "$1" == "--image" || "$1" == "-i" ]]; then
+                image="$2"
+            fi
+            shift
+            ;;
+        -p|--preserve-volumes)
+            # Allow for short/long argument
+            # Set whether to backup the volumes
+            preserve_volumes=true
+            shift
+            ;;
+        -v|--verbose)
+            # Allow for short/long argument
+            # Set whether to print verbose
+            verbose=true
+            shift
+            ;;
+        -h|--help)
+            # Allow for short/long argument
+            # Set whether to print help
+            print_help=true
+            shift
+            ;;
+        *)
+            ARGS="$ARGS $1"
+            shift
+            ;;
+    esac
+done
+
+# Set the positional args
+eval set -- "$ARGS"
+
+# If help was requested, print the help and exit
+if $print_help; then
+    echo "$HEADER"
+    echo
+    print_usage "$0"
+    exit
+fi
+
+# Make sure this is run as root
+# Check after arg parsing so --help can be run without root
+if [[ "$EUID" -ne "0" ]]; then
+    echo "Error: Must be run as root" >&2
+    exit 1
+fi
+
+
+# If a container or image was not specified, print an error and print the usage
+# to stderr before exiting
+if [[ -z "$container" || -z "$image" ]]; then
+    echo "Error: Must specify a container and image" >&2
+    echo "$(print_usage "$0")" >&2
+    exit
+fi
+
+# Provide ample warning to the user about the potential dangers
+echo
+echo -e -n "\e[1;31mWARNING\e[0m: "
+echo       "Verify that the information below is correct. Failure to do"
+echo -e    "         so may result in \e[1;31mPERMANENT\e[0m loss of data."
+echo
+
+# Print the container name but outside of the -e
+echo -ne "    Container to update : '\e[1;33m"
+echo -n  "$container"
+echo -e  "\e[0m'"
+
+# Print the image name but outside of the -e
+echo -ne "    Image to use        : '\e[1;33m"
+echo -n  "$image"
+echo -e  "\e[0m'"
+
+# Print the arguments to run with the updated container but outside of -e
+echo -ne "    Post-update args    : \e[1;33m"
+echo -n  "$container_args"
+echo -e  "\e[0m"
+
+# Print whether preserve_volumes is on
+echo -n  "    Preserve Volumes    : "
+if $preserve_volumes; then
+    echo -e "\e[1;32myes\e[0m"
+else
+    echo -e "\e[1;31mno\e[0m"
+fi
+
+# If the user specified a systemd service, print its name
+if $systemd; then
+    echo -ne "    Systemd service     : '\e[1;33m"
+    echo -n  "$systemd_name"
+    echo -e  "\e[0m'"
+fi
+
+echo
+
+# Default to no
+proceed="no"
+
+# Prompt the user to verify the parameters
+read -p "Do you wish to continue with the parameters above? [Y/n]: " proceed
+
+# If the user agrees, continue
+if echo -n "$proceed" | grep -Ei '^(y|yes)$' >/dev/null 2>&1; then
+    echo "Proceeding with operations ... "
+    echo
+else
+    echo "Exiting"
+    exit
+fi
+
+echo
+
+########################################
+## Pull the image
+########################################
+
+# If verbose, show output from docker pull
+if $verbose; then
+    echo "Pulling $image:"
+
+    # Pull the image
+    echo "    docker pull \"$image\""
+    docker pull "$image"
+
+    # If it couldn't be done, error and exit
+    if [[ "$?" -ne "0" ]]; then
+        echo "Error: Operation failed" >&2
+        exit 1
+    fi
+    echo
+# end if $verbose
+else
+    echo -n "Pulling $image ... "
+
+    # Pull the image, hiding the output
+    docker pull "$image" >/dev/null 2>&1
+
+    # If it couldn't be done, error and exit
+    # If it worked, print that it finished
+    if [[ "$?" -ne "0" ]]; then
+        echo -e "\e[1;31mFAILED\e[0m"
+        echo "Exiting"
+        exit 1
+    else
+        echo -e "\e[1;32mDONE\e[0m"
+    fi
+fi
+# end if ! $verbose
+
+########################################
+## Preserve the volumes
+########################################
+
+# Name the temporary container
+tmp_container="${container}_data_$(date +%Y%m%d%H%M%S)"
+
+# If the user chose to preserve volumes, mount them in another container
+if $preserve_volumes; then
+    if $verbose; then
+        echo "Pulling image for temporary container:"
+
+        echo "    docker pull busybox:latest"
+
+        # Pull busybox
+        docker pull busybox:latest
+
+        # If it couldn't be done, error and exit
+        if [[ "$?" -ne "0" ]]; then
+            echo "Error: Operation failed" >&2
+            exit 1
+        fi
+        echo
+    # end if $verbose
+    else
+        echo -n "Pulling image for temporary container ... "
+
+        # Pull busybox, hiding the output
+        docker pull busybox:latest > /dev/null 2>&1
+
+        # If it couldn't be done, error and exit
+        # If it worked, print that it finished
+        if [[ "$?" -ne "0" ]]; then
+            echo -e "\e[1;31mFAILED\e[0m"
+            echo "Exiting"
+            exit 1
+        else
+            echo -e "\e[1;32mDONE\e[0m"
+        fi
+    fi
+    # end if ! $verbose
+
+    # Start the temporary container with the same volumes as the one being
+    # worked with
+    if $verbose; then
+        echo "Starting temporary busybox container to preserve volumes:"
+        
+        echo "    docker run --volumes-from \"$container\" --name \"$tmp_container\" busybox:latest"
+
+        # Run the temporary container
+        docker run --rm --volumes-from "$container" --name "$tmp_container" busybox:latest
+        
+        # If it couldn't be done, error and exit
+        if [[ "$?" -ne "0" ]]; then
+            echo "Error: Operation failed" >&2
+            exit 1
+        fi
+        echo
+    # end if $verbose
+    else
+        echo -n "Starting temporary busybox container to preserve volumes ... "
+   
+        # Run the temporary container, hiding output
+        docker run --rm --volumes-from "$container" --name "$tmp_container" busybox:latest >/dev/null 2>&1
+
+        # If it couldn't be done, error and exit
+        # If it worked, print that it finished
+        if [[ "$?" -ne "0" ]]; then
+            echo -e "\e[1;31mFAILED\e[0m"
+            echo "Exiting"
+            exit 1
+        else
+            echo -e "\e[1;32mDONE\e[0m"
+        fi
+    fi
+    # end if ! $verbose
+fi
+# end if $preserve_volumes
+
+########################################
+## Stop the running container
+########################################
+
+running=false
+
+echo -n "Checking if $container is running ... "
+
+# Determine if the container is actually running
+if [[ "$(docker container inspect -f '{{.State.Status}}' "$container" )" == "running" ]]; then
+    running=true
+    echo -e "\e[1;33mYES\e[0m"
+else
+    echo -e "\e[1;33mNO\e[0m"
+fi
+
+# If the container is running, stop it
+if $running; then
+    # If the user provided a systemd service, stop it
+    # Else try stopping it via docker stop
+    if $systemd; then
+        if $verbose; then
+            echo "Stopping $systemd_name:"
+
+            echo "    systemctl stop \"$systemd_name\""
+
+            # Stop the service
+            systemctl stop "$systemd_name"
+
+            # If it couldn't be done, error and exit
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Operation failed" >&2
+                exit 1
+            fi
+            echo
+        # end if $verbose
+        else
+            echo -n "Stopping $systemd_name ... "
+
+            # Stop the service, hiding output
+            systemctl stop "$systemd_name" >/dev/null 2>&1
+
+            # If it couldn't be done, error and exit
+            # If it worked, print that it finished
+            if [[ "$?" -ne "0" ]]; then
+                echo -e "\e[1;31mFAILED\e[0m"
+                echo "Exiting"
+                exit 1
+            else
+                echo -e "\e[1;32mDONE\e[0m"
+            fi
+        fi
+        # end if ! $verbose
+    # end if $systemd
+    else
+        if $verbose; then
+            echo "Stopping $container:"
+        
+            echo "    docker stop \"$container\""
+
+            # Stop the container
+            docker stop "$container"
+
+            # If it couldn't be done, error and exit
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Operation failed" >&2
+                exit 1
+            fi
+            echo
+        # end if $verbose
+        else
+            echo -n "Stopping $container ... "
+
+            # Stop the container, hiding output
+            docker stop "$container" >/dev/null 2>&1
+
+            # If it couldn't be done, error and exit
+            # If it worked, print that it finished
+            if [[ "$?" -ne "0" ]]; then
+                echo -e "\e[1;31mFAILED\e[0m"
+                echo "Exiting"
+                exit 1
+            else
+                echo -e "\e[1;32mDONE\e[0m"
+            fi
+        fi
+        # end if ! $verbose
+    fi
+    # end if ! systemd
+fi
+# end if running
+
+########################################
+## Remove the old container
+########################################
+
+# Remove the old container
+if $verbose; then
+    echo "Removing old $container container:"
+
+    echo "    docker rm \"$container\""
+
+    # Remove the container
+    docker rm "$container"
+        
+    # If it couldn't be done, error and exit
+    if [[ "$?" -ne "0" ]]; then
+        echo "Error: Operation failed" >&2
+        exit 1
+    fi
+    echo
+# end if $verbose
+else
+    echo -n "Removing old $container container ... "
+
+    # Remove the container, hiding output
+    docker rm "$container" >/dev/null 2>&1
+
+    # If it couldn't be done, error and exit
+    # If it worked, print that it finished
+    if [[ "$?" -ne "0" ]]; then
+        echo -e "\e[1;31mFAILED\e[0m"
+        echo "Exiting"
+        exit 1
+    else
+        echo -e "\e[1;32mDONE\e[0m"
+    fi
+fi
+# end if ! $verbose
+
+########################################
+## Build the new container
+########################################
+
+# If preserving volumes, add it to the arguments
+arguments="$container_args"
+if $preserve_volumes; then
+    arguments="$arguments --volumes-from $tmp_container "
+fi
+
+# Try creating the container with the updated image, the volumes from the tmp
+# container if applicable, and any args specified by the user
+if $verbose; then
+    echo "Creating updated container:"
+
+    echo "docker create $arguments --name \"$container\" \"$image\""
+
+    # Build the container
+    docker create $arguments --name "$container" "$image"
+
+    # If it couldn't be done, error and exit
+    if [[ "$?" -ne "0" ]]; then
+        echo "Error: Operation failed" >&2
+        exit 1
+    fi
+    echo
+# end if $verbose
+else
+    echo -n "Creating updated container ... "
+
+    # Build the container, hiding the output
+    docker create $arguments --name "$container" "$image" >/dev/null 2>&1
+
+    # If it couldn't be done, error and exit
+    # If it worked, print that it finished
+    if [[ "$?" -ne "0" ]]; then
+        echo -e "\e[1;31mFAILED\e[0m"
+        echo "Exiting"
+        exit 1
+    else
+        echo -e "\e[1;32mDONE\e[0m"
+    fi
+fi
+# end if ! $verbose
+
+########################################
+## Remove temporary container
+########################################
+
+if $preserve_volumes; then
+    if $verbose; then
+        echo "Stopping/Removing temporary busybox container:"
+
+        echo "    docker stop $tmp_container"
+
+        # Stop the tmp container (removing it)
+        docker stop $tmp_container
+
+        # If it couldn't be done, error and exit
+        if [[ "$?" -ne "0" ]]; then
+            echo "Error: Operation failed" >&2
+            exit 1
+        fi
+        echo
+    # end if $verbose
+    else
+        echo -n "Stopping/Removing temporary busybox container ... "
+
+        # Stop the tmp container (removing it), hiding output
+        docker stop "$tmp_container"
+
+        # If it couldn't be done, error and exit
+        # If it worked, print that it finished
+        if [[ "$?" -ne "0" ]]; then
+            echo -e "\e[1;31mFAILED\e[0m"
+            echo "Exiting"
+            exit 1
+        else
+            echo -e "\e[1;32mDONE\e[0m"
+        fi
+    fi
+fi
+
+########################################
+## Start the updated container
+########################################
+
+# If the container was initially running, start it.
+# Don't start it if it wasn't running before
+if $running; then
+    # If the user gave a systemd service, start it
+    # Else start it via docker start
+    if $systemd; then
+        if $verbose; then
+            echo "Starting $systemd_name:"
+
+            echo "    systemctl start \"$systemd_name\""
+        
+            # Start the systemd service
+            systemctl start "$systemd_name"
+
+            # If it couldn't be done, error and exit
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Operation failed" >&2
+                exit 1
+            fi
+            echo
+        # end if $verbose
+        else
+            echo -n "Starting $systemd_name ... "
+
+            # Start the service, hiding output
+            systemctl start "$systemd_name" >/dev/null 2>&1
+
+            # If it couldn't be done, error and exit
+            # If it worked, print that it finished
+            if [[ "$?" -ne "0" ]]; then
+                echo -e "\e[1;31mFAILED\e[0m"
+                echo "Exiting"
+                exit 1
+            else
+                echo -e "\e[1;32mDONE\e[0m"
+            fi
+        fi
+        # end if ! $verbose
+    # end if $systemd
+    else 
+        if $verbose; then
+            echo "Starting $container:"
+
+            echo "    docker start \"$container\""
+
+            # Start the container
+            docker start "$container"
+
+            # If it couldn't be done, error and exit
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Operation failed" >&2
+                exit 1
+            fi
+            echo
+        # end if $verbose
+        else
+            echo -n "Starting $container ... "
+
+            # Start the container, hiding output
+            docker start "$container" >/dev/null 2>&1
+            
+            # If it couldn't be done, error and exit
+            # If it worked, print that it finished
+            if [[ "$?" -ne "0" ]]; then
+                echo -e "\e[1;31mFAILED\e[0m"
+                echo "Exiting"
+                exit 1
+            else
+                echo -e "\e[1;32mDONE\e[0m"
+            fi
+        fi
+        # end if ! $verbose
+    fi 
+    # end if ! $systemd
+fi
+# end if $running
+
+echo "All operations completed successfully"
+
+exit
