@@ -1,2 +1,2 @@
 # docker-utilities
-Miscellaneous Docker utilities I use on my systems
+This is a collection of miscellaneous docker utilities that I use on my systems. I plan to update this repo as I make changes or add new utilities.
