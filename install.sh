@@ -51,6 +51,11 @@ function install_tool {
             # Install the tool
             install -g 0 -o 0 -m 0555 "./$1" "$2"
 
+            # If it couldn't be done, error
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Could not install $1"
+            fi
+
             # Install the man page if possible
             if [[ ! -z "$MAN_DIR" && -f "./man/$1.1" ]]; then
                 echo "Installing man page for $1"
@@ -63,11 +68,6 @@ function install_tool {
 
                 # Gzip it
                 gzip "$MAN_DIR/man1/$1.1"
-            fi
-
-            # If it couldn't be done, error
-            if [[ "$?" -ne "0" ]]; then
-                echo "Error: Could not install $1"
             fi
         else
             echo "The version of $1 installed appears to be newer than the version you are trying to install."
@@ -82,6 +82,11 @@ function install_tool {
 
                 # Install the tool
                 install -g 0 -o 0 -m 0555 "./$1" "$2"
+
+                # If it couldn't be done, error
+                if [[ "$?" -ne "0" ]]; then
+                    echo "Error: Could not install $1"
+                fi
             
                 # Install the man page if possible
                 if [[ ! -z "$MAN_DIR" && -f "./man/$1.1" ]]; then
@@ -99,10 +104,31 @@ function install_tool {
             fi
         fi
     else
-        echo "Installing $1 version $this_version"
+        echo "Installing utility $1 version $this_version"
 
+        
         # Install the tool
-        cp "./$1" "$2/$1"
+        install -g 0 -o 0 -m 0555 "./$1" "$2"
+            
+        # Install the man page if possible
+        if [[ ! -z "$MAN_DIR" && -f "./man/$1.1" ]]; then
+            echo "Installing man page for $1"
+
+            install -g 0 -o 0 -m 0644 "./man/$1.1" "$MAN_DIR/man1/"
+        
+            # If it couldn't be done, error
+            if [[ "$?" -ne "0" ]]; then
+                echo "Error: Could not install $1"
+            fi
+
+            # If it already exists, remove it
+            if [[ -f "$MAN_DIR/man1/$1.1.gz" ]]; then
+                rm -f "$MAN_DIR/man1/$1.1.gz"
+            fi
+
+            # Gzip it
+            gzip "$MAN_DIR/man1/$1.1"
+        fi
 
         # If it couldn't be done, error
         if [[ "$?" -ne "0" ]]; then
