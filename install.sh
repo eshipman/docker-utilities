@@ -6,13 +6,13 @@ INSTALL_PATH="/usr/local/bin"
 MAN_DIR=""
 
 # Determine where man pages are located on this system
-if [[ -d /usr/local/share/man ]]; then
+if [[ -d /usr/local/share/man/man1 ]]; then
     MAN_DIR="/usr/local/share/man"
-elif [[ -d /usr/local/man ]]; then
+elif [[ -d /usr/local/man/man1 ]]; then
     MAN_DIR="/usr/local/man"
-elif [[ -d /usr/share/man ]]; then
+elif [[ -d /usr/share/man/man1 ]]; then
     MAN_DIR="/usr/share/man"
-elif [[ -d /usr/man ]]; then
+elif [[ -d /usr/man/man1 ]]; then
     MAN_DIR="/usr/man"
 fi
 
