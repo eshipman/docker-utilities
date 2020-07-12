@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # The directory to install the scripts to
 INSTALL_PATH="/usr/local/bin"
