@@ -1,0 +1,66 @@
+.\" Manpage for dockmaster.
+.TH man 1 "1 November 2020" "1.1" "dockmaster man page"
+.SH NAME
+dockmaster-build \- a simple and easy-to-use docker container builder
+
+.SH SYNOPSIS
+.B dockmaster-build
+[\fIOPTIONS\fR]...
+
+.SH DESCRIPTION
+\fBdockmaster-build\fR is a tool for building docker containers and systemd services to manage them.
+
+.SH OPTIONS
+.TP
+\fB\-i\fR, \fB\-\-image\fR [\fIIMAGE\fR]
+The image to use when building the container
+.TP
+\fB\-c\fR, \fB\-\-container\fR [\fINAME\fR]
+The name to assign to the container
+.TP
+\fB\-a\fR, \fB\-\-args\fR "[\fIARGUMENTS\fR]..."
+The extra arguments to supply to the container
+.TP
+\fB-s\fR, \fB\-\-systemd\fR [\fINAME\fR]
+Create a systemd service to manage the container
+.TP
+\fB\-V\fR, \fB\-\-volume\fR [\fIVOLUME MOUNT\fR]
+The volume to mount in the container
+.TP
+\fB\-E\fR, \fB\-\-env-file\fR [\fIFILE\fR]
+Add an environment file to the built container
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Print more verbose output
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Prints a basic usage and exits
+.TP
+\fB\-e\fR, \fB\-\-version\fR
+Prints the version information and exits
+
+.SH EXAMPLE
+The examples shown below demonstrate the use of \fBdockmaster-build\fR.
+
+.PP
+The following command builds a new bitwarden container and systemd service for a 64-bit arm machine, mounting a volume and passing port 80 to the container.
+.in +4n
+.EX
+.RB "dockmaster-build \-\-container bitwarden \-i bitwarden/server:aarch64 \-\-volume=/etc/docker/bitwarden/bw_data:/data \-a \(dq\-p 80:80\(dq \-\-systemd bitwarden.service"
+
+.PP
+The following command builds a new jellyfin container.
+.in +4n
+.EX
+.RB "dockmaster-build \-\-container jellyfin \-i jellyfin/jellyfin \-a \(dq\-\-user 1000:1000 \-\-restart=unless\-stopped\(dq \-\-network=host"
+
+.SH AUTHOR
+Evan Shipman
+.SH BUGS
+No known bugs.
+Report any bugs to <https://github.com/eshipman/docker-utilities>.
+.SH COPYRIGHT
+Copyright \(co 2020 Evan Shipman
+License MIT: <https://opensource.org/licenses/MIT>.
+.SH SEE ALSO
+docker(1), systemd(1)

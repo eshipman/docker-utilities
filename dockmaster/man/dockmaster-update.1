@@ -1,0 +1,65 @@
+.\" Manpage for dockmaster.
+.TH man 1 "1 November 2020" "1.1" "dockmaster man page"
+.SH NAME
+dockmaster-update \- a simple and easy-to-use docker container updater
+
+.SH SYNOPSIS
+.B dockmaster-update
+[\fIOPTIONS\fR]...
+
+.SH DESCRIPTION
+\fBdockmaster-update\fR is a tool for updating docker containers and systemd services that manage them. It can rebuild containers with different images and/or different options.
+
+.SH OPTIONS
+.TP
+\fB\-i\fR, \fB\-\-image\fR [\fIIMAGE\fR]
+The image to rebuild the container with
+.TP
+\fB\-c\fR, \fB\-\-container\fR [\fINAME\fR]
+The name of the container to update
+.TP
+\fB\-a\fR, \fB\-\-args\fR "[\fIARGUMENTS\fR]..."
+The extra arguments to supply to the container
+.TP
+\fB-s\fR, \fB\-\-systemd\fR [\fINAME\fR]
+The name of the systemd service that manages this container
+.TP
+\fB\-p\fR, \fB\-\-preserve-volumes\fR
+Preserve the container's volume(s) and remount it/them in the same location(s)
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Print more verbose output
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Prints a basic usage and exits
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Prints the version information and exits
+
+.SH EXAMPLE
+The examples shown below demonstrate the use of \fBdockmaster-update\fR.
+
+.PP
+The following command updates a jellyfin container, preserving volume mounts. If the container is running when \fBdockmaster\fR is executed, the rebuilt container will be started. The options in the string after \fB\-a\fR will be used when building the container.
+.in +4n
+.EX
+.RB "dockmaster update \-\-container jellyfin \-\-image jellyfin/jellyfin \-\-preserve\-volumes \-a \(dq\-\-user 1000:1000 \-\-net=host \-\-restart=unless\-stopped\(dq"
+
+.PP
+The command below updates an existing nginx container, preserving volume mounts and exposes both ports 80 and 443 from the host to the rebuilt container. It interacts with systemd to start/restart the service as needed.
+.in +4n
+.EX
+.RB "dockmaster update \-c webserver \-i nginx \-p \-v \-s nginx.service \-a \(dq\-p 80:80 \-p 443:443\(dq"
+.EE
+.in
+
+.SH AUTHOR
+Evan Shipman
+.SH BUGS
+No known bugs.
+Report any bugs to <https://github.com/eshipman/docker-utilities>.
+.SH COPYRIGHT
+Copyright \(co 2020 Evan Shipman
+License MIT: <https://opensource.org/licenses/MIT>.
+.SH SEE ALSO
+docker(1), systemd(1)

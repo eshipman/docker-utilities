@@ -1,0 +1,74 @@
+.\" Manpage for dockmaster.
+.TH man 1 "1 November 2020" "1.1" "dockmaster man page"
+.SH NAME
+dockmaster \- a simple and easy-to-use docker container manager
+
+.SH SYNOPSIS
+.B dockmaster
+[\fICOMMAND\fR]
+[\fICOMMAND OPTIONS\fR]...
+.B dockmaster
+[\fIOPTIONS\fR]...
+
+.SH DESCRIPTION
+\fBdockmaster\fR is a tool for building/managing docker containers. It has the capability to build a container with a systemd service and rebuild existing docker containers with different images or arguments.
+
+.SH COMMANDS
+.TP
+\fBbuild\fR
+Build a docker container (and optional systemd service) according to specified parameters
+.TP
+\fBupdate\fR
+Update an existing docker container with a different image or parameters
+
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Prints a basic usage and exits
+.TP
+\fB\-V\fR, \fB\-\-version\fR <container>
+Show version information and exit
+
+.SH COMMAND OPTIONS
+.TP
+See each command's manual (man dockmaster-\fBCOMMAND\fR) for additional information.
+
+.SH EXAMPLE
+The examples shown below demonstrate the use of \fBdockmaster\fR.
+
+.PP
+The following command builds a new bitwarden container and systemd service for a 64-bit arm machine, mounting a volume and passing port 80 to the container.
+.in +4n
+.EX
+.RB "dockmaster-build \-\-container bitwarden \-i bitwarden/server:aarch64 \-\-volume=/etc/docker/bitwarden/bw_data:/data \-a \(dq\-p 80:80\(dq \-\-systemd bitwarden.service"
+
+.PP
+The following command builds a new jellyfin container.
+.in +4n
+.EX
+.RB "dockmaster-build \-\-container jellyfin \-i jellyfin/jellyfin \-a \(dq\-\-user 1000:1000 \-\-restart=unless\-stopped\(dq \-\-network=host"
+
+.PP
+The following command updates a jellyfin container, preserving volume mounts. If the container is running when \fBdockmaster\fR is executed, the rebuilt container will be started. The options in the string after \fB\-a\fR will be used when building the container.
+.in +4n
+.EX
+.RB "dockmaster update \-\-container jellyfin \-\-image jellyfin/jellyfin \-\-preserve\-volumes \-a \(dq\-\-user 1000:1000 \-\-net=host \-\-restart=unless\-stopped\(dq"
+
+.PP
+The command below updates an existing nginx container, preserving volume mounts and exposes both ports 80 and 443 from the host to the rebuilt container. It interacts with systemd to start/restart the service as needed.
+.in +4n
+.EX
+.RB "dockmaster update \-c webserver \-i nginx \-p \-v \-s nginx.service \-a \(dq\-p 80:80 \-p 443:443\(dq"
+.EE
+.in
+
+.SH AUTHOR
+Evan Shipman
+.SH BUGS
+No known bugs.
+Report any bugs to <https://github.com/eshipman/docker-utilities>.
+.SH COPYRIGHT
+Copyright \(co 2020 Evan Shipman
+License MIT: <https://opensource.org/licenses/MIT>.
+.SH SEE ALSO
+docker(1), systemd(1)

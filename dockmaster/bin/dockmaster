@@ -1,0 +1,57 @@
+#!/bin/bash
+
+################################################################################
+## Name    : Dockmaster (Docker utility manager)                              ##
+## Usage   : dockmaster --help or man dockmaster                              ##
+## Author  : Evan Shipman                                                     ##
+## Descr.  : This tool is designed to execute the other dockmaster sub-tools. ##
+##                                                                            ##
+## Changes : v1.0 - Initial creation.                                         ##
+##           v1.1 - Added dockmaster-build                                    ##
+################################################################################
+
+NAME="dockmaster"
+VERSION="1.1"
+COPYRIGHT="Copyright (C) 2020 Evan Shipman"
+HEADER="$NAME version $VERSION
+$COPYRIGHT
+License MIT: https://opensource.org/licenses/MIT"
+
+# The executable to run
+executable=""
+
+# The command line arguments to pass to the executable
+options=""
+container=""
+
+# Print the usage of this script
+# $0 - $0 of this script, the command executed calling this script
+function print_usage {
+    echo "Usage: $0 [COMMAND] [COMMAND OPTIONS]"
+    echo "       $0 [OPTIONS]"
+    echo
+    echo "Commands:"
+    echo
+    echo "    update                             Updates a docker container with a specified image"
+    echo "    build                              Builds a docker container according to parameters"
+    echo
+    echo "Options:"
+    echo
+    echo "    [-h | --help]                      Print this output"
+    echo "    [-V | --version]                   Print version and exit"
+    echo
+    echo "Command Options:"
+    echo
+    echo "    For a list of command options, please see specific command help/man pages."
+    echo
+}
+
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    print_usage
+    exit
+elif [[ "$1" == "--version" || "$1" == "-v" ]]; then
+    echo "$HEADER"
+    exit
+elif echo "$@" | grep "$1" > /dev/null 2>&1; then
+    dockmaster-$1 $@
+fi

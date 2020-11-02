@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ################################################################################
-## Name    : DockUp (Docker Updater)                                          ##
-## Usage   : ./dockup --help for usage info.                                  ##
+## Name    : Dockmaster-Update (Docker Updater)                               ##
+## Usage   : dockmaster update --help or man dockmaster-update                ##
 ## Author  : Evan Shipman                                                     ##
 ## Descr.  : This tool is designed to update an existing docker container     ##
 ##           given the container's name, the image to pull, and other options.##
@@ -10,17 +10,18 @@
 ##           image (usually an update) and with given arguments, preserving   ##
 ##           any volumes mounted on the previous container.                   ##
 ##           For example:                                                     ##
-##               ./dockup -c bitwarden -i bitwardenrs/server:aarch64 -p \     ##
-##               -a "-p 80:80" -s bitwarden.service                           ##
+##               dockmaster update -c bitwarden -i bitwardenrs/server:aarch64 ##
+##                   -p -a "-p 80:80" -s bitwarden.service                    ##
 ##           The above command will update a bitwarden container with the     ##
 ##           latest aarch64 image. It will preserve mounted volumes, and add  ##
 ##           -p 80:80 to the container's command line arguments (opening up   ##
 ##           the websocket). The -s arguments specify that there is a systemd ##
 ##           service called bitwarden.service that will manage the container. ##
 ## Changes : v1.0 - Initial creation.                                         ##
+##           v1.1 - Added dockmaster-build                                    ##
 ################################################################################
 
-NAME="DockUp"
+NAME="dockmaster-update"
 VERSION="1.0"
 COPYRIGHT="Copyright (C) 2020 Evan Shipman"
 HEADER="$NAME version $VERSION
@@ -81,6 +82,7 @@ while (( "$#" )); do
                 container="$(echo "$1" | sed -e 's/^--container=//')"
             elif [[ "$1" == "--container" || "$1" == "-c" ]]; then
                 container="$2"
+                shift
             fi
             shift
             ;;
@@ -91,6 +93,7 @@ while (( "$#" )); do
                 container_args="$(echo "$1" | sed -e 's/^--args=//')"
             elif [[ "$1" == "--args" || "$1" == "-a" ]]; then
                 container_args="$2"
+                shift
             fi
             shift
             ;;
@@ -99,11 +102,11 @@ while (( "$#" )); do
             # Set the systemd service name
             if [[ "$1" == "--systemd="* ]]; then
                 systemd_name="$(echo "$1" | sed -e 's/^--systemd=//')"
-                systemd=true
             elif [[ "$1" == "--systemd" || "$1" == "-s" ]]; then
                 systemd_name="$2"
-                systemd=true
+                shift
             fi
+            systemd=true
             shift
             ;;
         -i|--image|--image=*)
@@ -113,6 +116,7 @@ while (( "$#" )); do
                 image="$(echo "$1" | sed -e 's/^--image=//')"
             elif [[ "$1" == "--image" || "$1" == "-i" ]]; then
                 image="$2"
+                shift
             fi
             shift
             ;;
