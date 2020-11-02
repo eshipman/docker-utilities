@@ -37,7 +37,7 @@ function install_tool {
     this_major="$(echo "$this_version" | cut -d. -f1)"
     this_minor="$(echo "$this_version" | cut -d. -f2)"
 
-    for tool in $(find "./$1/bin" -type f -name "$1* -exec basename {} \;"); do
+    for tool in $(find "./$1/bin" -type f -name "$1*" -exec basename {} \;); do
         if [[ -f "$2/$tool" ]]; then
             # Get the installed version, minor/major
             installed_version="$("$2/$tool" --version | grep 'version ' | sed -r 's/^[^ ]+ version //')"

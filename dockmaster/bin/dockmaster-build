@@ -18,7 +18,7 @@
 ################################################################################
 
 NAME="dockmaster-build"
-VERSION="1.0"
+VERSION="1.1"
 COPYRIGHT="Copyright (C) 2020 Evan Shipman"
 HEADER="$NAME version $VERSION
 $COPYRIGHT
