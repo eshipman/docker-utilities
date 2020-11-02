@@ -121,9 +121,9 @@ while (( "$#" )); do
             # Allow for short/long/long= argument
             # Set the updated container's arguments
             if [[ "$1" == "--args="* ]]; then
-                container_args="$(echo "$1" | sed -e 's/^--args=//')"
+                container_args+="$(echo "$1" | sed -e 's/^--args=//')"
             elif [[ "$1" == "--args" || "$1" == "-a" ]]; then
-                container_args="$2"
+                container_args+="$2"
                 shift
             fi
             has_container_args=true
@@ -309,6 +309,7 @@ if $systemd; then
     echo -e  "\e[0m'"
 fi
 
+exit
 echo
 
 # Default to no
