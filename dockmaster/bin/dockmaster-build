@@ -311,8 +311,6 @@ fi
 
 echo
 
-exit
-
 # Default to no
 proceed="no"
 
